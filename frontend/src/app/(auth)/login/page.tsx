@@ -9,19 +9,43 @@ import Link from 'next/link';
 import { Lock, Phone, ArrowRight } from 'lucide-react';
 
 export default function Login() {
-    const [phone, setPhone] = useState('');
+    const [phone, setPhone] = useState('+998');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+
+    const [phoneTouched, setPhoneTouched] = useState(false);
+    const [passTouched, setPassTouched] = useState(false);
 
     const { setToken, setUser } = useAuthStore();
     const router = useRouter();
     const { t } = useTranslation();
 
+    const isPhoneValid = phone.replace(/\D/g, '').length === 12; // 998 + 9 digits
+    const isPassValid = password.length >= 6;
+    const isFormValid = isPhoneValid && isPassValid;
+
+    const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        const digits = value.replace(/\D/g, '');
+        let res = '+998';
+        const rest = digits.startsWith('998') ? digits.slice(3) : digits;
+        if (rest.length > 0) res += ' ' + rest.substring(0, 2);
+        if (rest.length > 2) res += ' ' + rest.substring(2, 5);
+        if (rest.length > 5) res += ' ' + rest.substring(5, 7);
+        if (rest.length > 7) res += ' ' + rest.substring(7, 9);
+        setPhone(res);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setPhoneTouched(true);
+        setPassTouched(true);
+        if (!isFormValid) return;
+
         setLoading(true);
+        const cleanPhone = phone.replace(/\s+/g, '');
         try {
-            const { data } = await api.post('/auth/login', { phone, password });
+            const { data } = await api.post('/auth/login', { phone: cleanPhone, password });
             setToken(data.token);
             setUser(data.user);
             toast.success(t('welcome_back') + '!');
@@ -74,12 +98,18 @@ export default function Login() {
                                         name="phone"
                                         type="tel"
                                         required
-                                        className="appearance-none block w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 text-gray-900 dark:text-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-all font-medium sm:text-sm placeholder:text-gray-400"
-                                        placeholder="+998 90 123 45 67"
+                                        className={`appearance-none block w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-slate-950 border ${phoneTouched && !isPhoneValid ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/50' : 'border-gray-200 dark:border-slate-800 focus:border-blue-500 focus:ring-blue-500/50'} text-gray-900 dark:text-white rounded-2xl focus:outline-none focus:ring-2 focus:bg-white dark:focus:bg-slate-900 transition-all font-medium sm:text-sm placeholder:text-gray-400`}
+                                        placeholder="+998 __ ___ __ __"
                                         value={phone}
-                                        onChange={(e) => setPhone(e.target.value)}
+                                        onChange={handlePhoneChange}
+                                        onBlur={() => setPhoneTouched(true)}
                                     />
                                 </div>
+                                {phoneTouched && !isPhoneValid && (
+                                    <p className="mt-2 text-xs font-bold text-rose-500 ml-1 animate-in fade-in slide-in-from-top-1">
+                                        Telefon raqami to'liq kiritilmadi
+                                    </p>
+                                )}
                             </div>
 
                             <div>
@@ -95,23 +125,29 @@ export default function Login() {
                                         name="password"
                                         type="password"
                                         required
-                                        className="appearance-none block w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 text-gray-900 dark:text-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-all font-medium sm:text-sm placeholder:text-gray-400"
+                                        className={`appearance-none block w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-slate-950 border ${passTouched && !isPassValid ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500/50' : 'border-gray-200 dark:border-slate-800 focus:border-blue-500 focus:ring-blue-500/50'} text-gray-900 dark:text-white rounded-2xl focus:outline-none focus:ring-2 focus:bg-white dark:focus:bg-slate-900 transition-all font-medium sm:text-sm placeholder:text-gray-400`}
                                         placeholder="••••••••"
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
+                                        onBlur={() => setPassTouched(true)}
                                     />
                                 </div>
+                                {passTouched && !isPassValid && (
+                                    <p className="mt-2 text-xs font-bold text-rose-500 ml-1 animate-in fade-in slide-in-from-top-1">
+                                        Parol kamida 6 ta belgi bo'lishi kerak
+                                    </p>
+                                )}
                             </div>
                         </div>
 
                         <div className="pt-2">
                             <button
                                 type="submit"
-                                disabled={loading}
-                                className="group relative w-full flex justify-center items-center py-4 px-4 border border-transparent text-sm font-bold rounded-2xl text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-[0_8px_20px_rgba(37,99,235,0.25)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all disabled:opacity-70 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0"
+                                disabled={loading || !isFormValid}
+                                className="group relative w-full flex justify-center items-center py-4 px-4 border border-transparent text-sm font-bold rounded-2xl text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-[0_8px_20px_rgba(37,99,235,0.25)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0"
                             >
                                 {loading ? t('loading') : t('login')}
-                                {!loading && <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />}
+                                {!loading && isFormValid && <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />}
                             </button>
                         </div>
                     </form>
