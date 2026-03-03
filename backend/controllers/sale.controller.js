@@ -16,11 +16,8 @@ const parseSaleInput = (input) => {
 exports.createSale = async (req, res) => {
     const { items_text } = req.body; // array of strings: e.g., ["2 olma", "3 banan"]
     const business_id = req.user.business_id;
-    const client = await db.connect();
 
     try {
-        await client.query('BEGIN'); // Start transaction
-
         let totalAmount = 0;
         const processedItems = [];
         const notFoundProducts = [];
@@ -29,12 +26,11 @@ exports.createSale = async (req, res) => {
         for (const text of items_text) {
             const parsed = parseSaleInput(text);
             if (!parsed) {
-                await client.query('ROLLBACK');
                 return res.status(400).json({ message: `Noto'g'ri format: "${text}". Kutilgan format: "Soni Nomi" (Masalan: 2 olma)` });
             }
 
             // Find product in DB (using ILIKE for case-insensitive match)
-            const productQuery = await client.query(
+            const productQuery = await db.query(
                 `SELECT id, sell_price, stock FROM products WHERE business_id = $1 AND name ILIKE $2`,
                 [business_id, parsed.productName]
             );
@@ -58,7 +54,6 @@ exports.createSale = async (req, res) => {
         }
 
         if (notFoundProducts.length > 0) {
-            await client.query('ROLLBACK');
             return res.status(404).json({
                 error: 'PRODUCTS_NOT_FOUND',
                 not_found: notFoundProducts,
@@ -67,7 +62,7 @@ exports.createSale = async (req, res) => {
         }
 
         // 2. Insert into Sales table
-        const saleResult = await client.query(
+        const saleResult = await db.query(
             'INSERT INTO sales (business_id, cashier_id, total_amount) VALUES ($1, $2, $3) RETURNING id',
             [business_id, req.user.id, totalAmount]
         );
@@ -75,26 +70,24 @@ exports.createSale = async (req, res) => {
 
         // 3. Insert into Sale Items table & Deduct Stock
         for (const item of processedItems) {
-            await client.query(
+            await db.query(
                 'INSERT INTO sale_items (sale_id, product_id, quantity, price) VALUES ($1, $2, $3, $4)',
                 [saleId, item.product_id, item.quantity, item.price]
             );
 
             // Deduct stock
-            await client.query(
+            await db.query(
                 'UPDATE products SET stock = stock - $1 WHERE id = $2',
                 [item.quantity, item.product_id]
             );
         }
 
         // Audit log
-        await client.query(
+        await db.query(
             `INSERT INTO audit_logs (business_id, user_id, action, entity_type, entity_id, details) 
              VALUES ($1, $2, 'CREATE', 'SALE', $3, $4)`,
             [business_id, req.user.id, saleId, { total: totalAmount, items_count: processedItems.length }]
         );
-
-        await client.query('COMMIT'); // Commit transaction
 
         // Cache invalidation
         const cacheService = require('../services/cache.service');
@@ -103,11 +96,8 @@ exports.createSale = async (req, res) => {
         res.json({ message: "Savdo muvaffaqiyatli saqlandi", sale_id: saleId, total_amount: totalAmount });
 
     } catch (err) {
-        await client.query('ROLLBACK'); // Rollback on error
-        console.error(err.message);
-        res.status(500).send('Server error');
-    } finally {
-        client.release();
+        console.error('Sale error:', err.message);
+        res.status(500).json({ message: 'Server error: ' + err.message });
     }
 };
 

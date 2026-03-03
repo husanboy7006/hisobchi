@@ -57,8 +57,7 @@ const cacheService = require('./services/cache.service');
 
 app.get('/health', async (req, res) => {
     try {
-        const dbClient = await db.connect();
-        dbClient.release();
+        await db.query('SELECT 1');
         const redisStatus = await cacheService.isHealthy();
 
         res.status(200).json({

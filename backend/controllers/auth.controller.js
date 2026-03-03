@@ -9,14 +9,10 @@ exports.register = async (req, res) => {
         return res.status(400).json({ message: 'Phone and password are required' });
     }
 
-    const client = await db.connect();
-
     try {
-        await client.query('BEGIN');
-
-        const userExists = await client.query('SELECT id FROM users WHERE phone = $1', [phone]);
+        // Check if user already exists
+        const userExists = await db.query('SELECT id FROM users WHERE phone = $1', [phone]);
         if (userExists.rows.length > 0) {
-            await client.query('ROLLBACK');
             return res.status(400).json({ message: 'User already exists' });
         }
 
@@ -25,21 +21,21 @@ exports.register = async (req, res) => {
 
         // 1. Create Business
         const bName = business_name || `${first_name}'s Business` || 'My Business';
-        const newBusiness = await client.query(
+        const newBusiness = await db.query(
             'INSERT INTO businesses (name, sector) VALUES ($1, $2) RETURNING id, name',
             [bName, sector]
         );
         const business_id = newBusiness.rows[0].id;
 
         // 2. Create User as OWNER
-        const newUser = await client.query(
+        const newUser = await db.query(
             'INSERT INTO users (business_id, phone, password_hash, first_name, last_name, role) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, phone, role, business_id',
             [business_id, phone, password_hash, first_name, last_name, 'OWNER']
         );
         const user = newUser.rows[0];
 
         // 3. Create Subscription (Free Plan)
-        await client.query(
+        await db.query(
             `INSERT INTO subscriptions (business_id, plan_type, status, end_date) 
              VALUES ($1, 'FREE', 'ACTIVE', CURRENT_TIMESTAMP + interval '30 days')`,
             [business_id]
@@ -53,27 +49,22 @@ exports.register = async (req, res) => {
         const refresh_token = jwt.sign(payload, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
 
         // Save refresh token to user_sessions
-        await client.query(
-            'INSERT INTO user_sessions (user_id, refresh_token, expires_at) VALUES ($1, $2, CURRENT_TIMESTAMP + interval \'7 days\')',
+        await db.query(
+            `INSERT INTO user_sessions (user_id, refresh_token, expires_at) VALUES ($1, $2, CURRENT_TIMESTAMP + interval '7 days')`,
             [user.id, refresh_token]
         );
-
-        await client.query('COMMIT');
 
         res.cookie('refreshToken', refresh_token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'none',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
         res.json({ token, user });
     } catch (err) {
-        await client.query('ROLLBACK');
-        console.error(err.message);
-        res.status(500).send('Server error');
-    } finally {
-        client.release();
+        console.error('Register error:', err.message);
+        res.status(500).json({ message: 'Server error: ' + err.message });
     }
 };
 
@@ -104,22 +95,22 @@ exports.login = async (req, res) => {
         const refresh_token = jwt.sign(payload, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
 
         await db.query(
-            'INSERT INTO user_sessions (user_id, refresh_token, expires_at) VALUES ($1, $2, CURRENT_TIMESTAMP + interval \'7 days\')',
+            `INSERT INTO user_sessions (user_id, refresh_token, expires_at) VALUES ($1, $2, CURRENT_TIMESTAMP + interval '7 days')`,
             [user.id, refresh_token]
         );
 
         res.cookie('refreshToken', refresh_token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'none',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
         const { password_hash, ...userWithoutPassword } = user;
         res.json({ token, user: userWithoutPassword });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server error');
+        console.error('Login error:', err.message);
+        res.status(500).json({ message: 'Server error: ' + err.message });
     }
 };
 
