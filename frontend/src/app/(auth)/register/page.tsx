@@ -35,13 +35,13 @@ export default function Register() {
             toast.success(t('register') + ' muvaffaqiyatli');
             router.push('/dashboard');
         } catch (error: any) {
-            const msg = error.response?.data?.message || typeof error.response?.data === 'string' ? error.response?.data : null;
+            const msg = error.response?.data?.message || (typeof error.response?.data === 'string' ? error.response?.data : null);
             if (msg === 'User already exists') {
-                toast.error(t('user_already_exists') || 'Foydalanuvchi allaqachon mavjud');
+                toast.error('Bu telefon raqami allaqachon ro\'yxatdan o\'tgan!');
             } else if (msg) {
                 toast.error(`Xatolik: ${msg}`);
             } else {
-                toast.error(t('registration_failed') || "Ro'yxatdan o'tishda xatolik yuz berdi");
+                toast.error("Ro'yxatdan o'tishda xatolik yuz berdi");
             }
         } finally {
             setLoading(false);
