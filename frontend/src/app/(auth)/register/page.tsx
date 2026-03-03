@@ -35,11 +35,13 @@ export default function Register() {
             toast.success(t('register') + ' muvaffaqiyatli');
             router.push('/dashboard');
         } catch (error: any) {
-            const msg = error.response?.data?.message;
+            const msg = error.response?.data?.message || typeof error.response?.data === 'string' ? error.response?.data : null;
             if (msg === 'User already exists') {
-                toast.error(t('user_already_exists'));
+                toast.error(t('user_already_exists') || 'Foydalanuvchi allaqachon mavjud');
+            } else if (msg) {
+                toast.error(`Xatolik: ${msg}`);
             } else {
-                toast.error(t('registration_failed'));
+                toast.error(t('registration_failed') || "Ro'yxatdan o'tishda xatolik yuz berdi");
             }
         } finally {
             setLoading(false);
